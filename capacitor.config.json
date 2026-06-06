@@ -1,0 +1,10 @@
+{
+  "appId": "com.xiaoshen.app",
+  "appName": "小深",
+  "webDir": "dist",
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 2000 }
+  },
+  "server": { "androidScheme": "https", "cleartext": true },
+  "android": { "allowMixedContent": true }
+}
