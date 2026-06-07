@@ -42,18 +42,16 @@ export async function visionDescribe(base64, mime='image/jpeg') {
   return d.choices?.[0]?.message?.content || '';
 }
 
-export async function ttsSpeak(text, voice = 'tongtong') {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT);
+export async function ttsSpeak(text, voice = 'female') {
+  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), TIMEOUT);
   try {
     const r = await fetch(`${BASE}/audio/speech`, {
-      method: 'POST',
-      signal: ctrl.signal,
+      method: 'POST', signal: ctrl.signal,
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${KEY}` },
-      body: JSON.stringify({ model: 'glm-tts', input: text, voice, speed: 1.0, volume: 1.0, response_format: 'mp3' })
+      body: JSON.stringify({ model: 'glm-tts', input: text, voice, speed: 1.0, volume: 1.0, response_format: 'wav' })
     });
     clearTimeout(t);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error?.message || `HTTP ${r.status}`); }
     return await r.arrayBuffer();
   } catch (e) { clearTimeout(t); throw e; }
 }

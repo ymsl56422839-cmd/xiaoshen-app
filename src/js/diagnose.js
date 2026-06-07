@@ -3,11 +3,11 @@ import { deepseekChat, visionDescribe, ttsSpeak } from './api.js';
 export async function runDiagnostics() {
   const r = [];
 
-  // Network
+  // Network - test via DeepSeek (known to work)
   const t0 = Date.now();
   try {
     const ctrl = new AbortController(); const tm = setTimeout(() => ctrl.abort(), 5000);
-    await fetch('https://open.bigmodel.cn', { signal: ctrl.signal });
+    await fetch('https://api.deepseek.com', { signal: ctrl.signal });
     clearTimeout(tm); r.push({ name: '网络连接', ok: true, ms: Date.now() - t0, d: '正常' });
   } catch (e) { r.push({ name: '网络连接', ok: false, ms: Date.now() - t0, d: e.message }); }
 
@@ -19,7 +19,7 @@ export async function runDiagnostics() {
 
   // GLM-TTS
   const t2 = Date.now();
-  try { const buf = await race(ttsSpeak('测试音', '彤彤'), 8000);
+  try { const buf = await race(ttsSpeak('测试音', 'female'), 8000);
     r.push({ name: '智譜 GLM-TTS', ok: buf.byteLength > 0, ms: Date.now() - t2, d: buf.byteLength + 'B' }); }
   catch (e) { r.push({ name: '智譜 GLM-TTS', ok: false, ms: Date.now() - t2, d: e.message }); }
 
@@ -34,10 +34,13 @@ export async function runDiagnostics() {
     r.push({ name: '摄像头权限', ok: true, ms: 0, d: '已授权' }); }
   catch (e) { r.push({ name: '摄像头权限', ok: false, ms: 0, d: e.name === 'NotAllowedError' ? '被拒绝' : e.message }); }
 
-  // Mic
-  try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t => t.stop());
-    r.push({ name: '麦克风权限', ok: true, ms: 0, d: '已授权' }); }
-  catch (e) { r.push({ name: '麦克风权限', ok: false, ms: 0, d: e.name === 'NotAllowedError' ? '被拒绝' : e.message }); }
+  // Mic (test via Android native SpeechRecognizer, not WebView getUserMedia)
+  try {
+    const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+    await SpeechRecognition.requestPermissions();
+    const { available } = await SpeechRecognition.available();
+    r.push({ name: '麦克风权限', ok: available, ms: 0, d: available ? '已授权' : '不可用' });
+  } catch (e) { r.push({ name: '麦克风权限', ok: false, ms: 0, d: e.name === 'NotAllowedError' ? '被拒绝' : e.message }); }
 
   return r;
 }
