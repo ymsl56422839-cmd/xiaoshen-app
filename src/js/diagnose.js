@@ -19,7 +19,7 @@ export async function runDiagnostics() {
 
   // GLM-TTS
   const t2 = Date.now();
-  try { const buf = await race(ttsSpeak('测试音', 'female'), 8000);
+  try { const buf = await race(ttsSpeak('测试音', '彤彤'), 8000);
     r.push({ name: '智譜 GLM-TTS', ok: buf.byteLength > 0, ms: Date.now() - t2, d: buf.byteLength + 'B' }); }
   catch (e) { r.push({ name: '智譜 GLM-TTS', ok: false, ms: Date.now() - t2, d: e.message }); }
 
