@@ -1,48 +1,55 @@
+import { asrTranscribe } from './api.js';
 import { error as logErr } from './logger.js';
 
-let onResult, onState, listening = false;
+let onResult, recording = false;
 
-export function init(cbs) { onResult = cbs.onResult; onState = cbs.onState; }
+export function init(cbs) { onResult = cbs.onResult; }
 
 export async function startRecord() {
-  if (listening) return true;
+  if (recording) return true;
   try {
-    const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+    const { VoiceRecorder } = await import('@independo/capacitor-voice-recorder');
 
-    // Don't call requestPermissions — MIUI resets the state
-    const { available } = await SpeechRecognition.available();
-    if (!available) { logErr('原生语音识别不可用', 'ASR'); return false; }
+    // Check permission
+    const perm = await VoiceRecorder.hasRecordPermission();
+    if (!perm) {
+      const granted = await VoiceRecorder.requestRecordPermission();
+      if (!granted) { logErr('录音权限被拒绝', 'ASR'); return false; }
+    }
 
-    try { await SpeechRecognition.removeAllListeners(); } catch {}
+    await VoiceRecorder.startRecording();
+    recording = true;
 
-    SpeechRecognition.addListener('partialResults', data => {
-      if (!listening) return;
-      if (data.matches?.length) {
-        onResult?.(data.matches[0], '');
-        stopRecord(); // got result, stop
-      }
-    });
+    // Auto-stop after 8 seconds
+    setTimeout(async () => {
+      if (!recording) return;
+      await stopAndTranscribe();
+    }, 8000);
 
-    // popup: true → use Android system dictation dialog (works on MIUI)
-    await SpeechRecognition.start({ language: 'zh-CN', maxResults: 1, popup: true });
-    listening = true;
-    onState?.('listening');
     return true;
   } catch (e) {
-    logErr('麦克风:' + (e.name === 'NotAllowedError' ? '被系统拒绝' : e.message), 'ASR');
+    logErr('录音启动失败:' + e.message, 'ASR');
     return false;
   }
 }
 
-export function stopRecord() {
-  if (!listening) return;
-  listening = false;
-  onState?.('end');
-  import('@capacitor-community/speech-recognition').then(mod => {
-    mod.SpeechRecognition.stop().then(r => {
-      if (r?.matches?.length) onResult?.(r.matches[0], '');
-    }).catch(() => {});
-  }).catch(() => {});
+async function stopAndTranscribe() {
+  if (!recording) return;
+  recording = false;
+  try {
+    const { VoiceRecorder } = await import('@independo/capacitor-voice-recorder');
+    const result = await VoiceRecorder.stopRecording();
+    const b64 = result.value?.recordDataBase64;
+    if (!b64) return;
+    const text = await asrTranscribe(b64);
+    if (text?.trim()) onResult?.(text.trim());
+  } catch (e) {
+    logErr('录音识别失败:' + e.message, 'ASR');
+  }
 }
 
-export function isRecording() { return listening; }
+export function stopRecord() {
+  if (recording) stopAndTranscribe();
+}
+
+export function isRecording() { return recording; }

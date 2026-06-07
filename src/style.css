@@ -67,6 +67,26 @@ body{display:flex;justify-content:center;align-items:center}
 
 .diag-act{display:flex;justify-content:center;padding:16px}
 
+/* CHAT LAYOUT (微信式: 恐龙在上 + 消息区 + 输入框) */
+.chat{height:100%;display:flex;flex-direction:column;background:var(--bg)}
+.chat-top{display:flex;align-items:center;padding:10px 16px;gap:8px;background:#fff;border-bottom:1px solid #f0e0d0;flex-shrink:0}
+.chat-back{background:none;border:none;font-size:1.2em;cursor:pointer;color:var(--or)}
+.chat-title{flex:1;font-weight:600;font-size:.95em;text-align:center}
+.chat-dino{display:flex;justify-content:center;padding:8px 0 4px;flex-shrink:0}
+.chat-dino .dino-wrap{width:100px;height:100px}
+.chat-status{text-align:center;font-size:.78em;color:var(--tl);padding:2px 16px;flex-shrink:0;min-height:20px}
+.chat-msgs{flex:1;overflow-y:auto;padding:4px 16px 8px;display:flex;flex-direction:column;gap:6px}
+.cm{max-width:82%;padding:10px 14px;border-radius:16px;font-size:.9em;line-height:1.5;word-break:break-all;animation:mIn .2s ease}
+@keyframes mIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.cm-u{align-self:flex-end;background:var(--or);color:#fff;border-bottom-right-radius:4px}
+.cm-a{align-self:flex-start;background:#fff;color:var(--txt);border-bottom-left-radius:4px;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.cm-s{align-self:center;background:#FFF3CD;color:#856404;font-size:.78em;border-radius:12px;padding:6px 12px}
+.chat-input{display:flex;padding:8px 16px 12px;gap:8px;flex-shrink:0}
+.chat-inp{flex:1;padding:12px 16px;border:2px solid #e8d5c4;border-radius:24px;font-size:.92em;font-family:inherit;outline:none;background:#fff;color:var(--txt)}
+.chat-inp:focus{border-color:var(--or)}
+.chat-send{padding:12px 22px;border:none;border-radius:24px;background:var(--or);color:#fff;font-size:.92em;font-weight:700;font-family:inherit;cursor:pointer}
+.chat-send:active{background:var(--od)}
+
 /* TOAST */
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(0,0,0,.85);color:#fff;padding:12px 24px;border-radius:24px;font-size:.85em;z-index:100;opacity:0;transition:all .3s;pointer-events:none}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
