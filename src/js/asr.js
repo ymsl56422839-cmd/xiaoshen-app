@@ -62,7 +62,9 @@ export async function stopRecord() {
   }
 
   try {
+    logErr('录音样本数:' + samples.length, 'ASR');
     const b64 = pcmToWavBase64(samples, 16000);
+    logErr('WAV长度:' + (b64?.length || 0), 'ASR');
     const text = await asrTranscribe(b64);
     if (text?.trim()) onResult?.(text.trim());
     else onResult?.('');
