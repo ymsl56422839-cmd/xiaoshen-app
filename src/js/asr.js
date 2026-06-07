@@ -10,7 +10,8 @@ export async function startRecord(){
   if(recording)return true;
   try{
     // Request mic permission via native Android dialog
-    await SpeechRecognition.requestPermissions();
+    const perm = await SpeechRecognition.requestPermissions();
+    logErr('权限状态: '+JSON.stringify(perm), 'ASR');
     stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
     const mime = detectMime();
     if(!mime){logErr('浏览器不支持音频录制','ASR');return false;}

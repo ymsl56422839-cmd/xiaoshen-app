@@ -31,8 +31,9 @@ async function startASRLoop(){
   if(!callActive||isSpeaking())return;
   const ok=await startRecord();
   if(!ok){
-    setStatus('⌨️ 麦克风不可用，请在下面打字');
-    showErr(lastError());
+    const err=lastError()||'';
+    setStatus('⌨️ 麦克风被拒，请在系统设置中允许');
+    showErr('请在设置→应用→小深→权限中开启麦克风');
     showTextInput();
   } else { showErr(''); hideTextInput(); setStatus('🎤 小深在听...'); }
 }
