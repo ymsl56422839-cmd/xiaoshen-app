@@ -25,7 +25,7 @@ export async function runDiagnostics() {
 
   // GLM-Vision (real tiny image from internet)
   const t3 = Date.now();
-  try { const desc = await race(visionDescribe(TEST_IMG, 'image/png'), 8000);
+  try { const desc = await race(visionDescribe(TEST_IMG, 'image/gif'), 8000);
     r.push({ name: '智譜 Vision', ok: !!desc, ms: Date.now() - t3, d: desc || '空' }); }
   catch (e) { r.push({ name: '智譜 Vision', ok: false, ms: Date.now() - t3, d: e.message }); }
 
@@ -45,8 +45,8 @@ export async function runDiagnostics() {
   return r;
 }
 
-// Tiny 1x1 pink PNG
-const TEST_IMG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+// Tiny 127B orange pixel GIF (valid image, wraps fast)
+const TEST_IMG = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 async function race(p, ms) {
   return new Promise((resolve, reject) => {
