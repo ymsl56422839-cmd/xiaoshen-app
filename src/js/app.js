@@ -31,8 +31,6 @@ async function doSpeak(t) {
   hideOverlay();
   if (callActive) startASRLoop();
 }
-  );
-}
 
 // Overlay helpers
 function showOverlay(t) { const e = document.getElementById('action-overlay'); if (e) { e.textContent = t; e.style.display = 'flex'; } }
