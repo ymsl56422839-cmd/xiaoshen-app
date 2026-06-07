@@ -57,15 +57,13 @@ export async function ttsSpeak(text, voice = 'female') {
 }
 
 export async function asrTranscribe(audioBase64) {
-  const fd = new FormData();
-  fd.append('model', 'glm-asr-2512');
-  fd.append('file_base64', audioBase64);
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), TIMEOUT);
   try {
     const r = await fetch(`${BASE}/audio/transcriptions`, {
       method: 'POST', signal: ctrl.signal,
-      headers: { 'Authorization': `Bearer ${KEY}` }, body: fd
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${KEY}` },
+      body: JSON.stringify({ model: 'glm-asr-2512', file_base64: audioBase64 })
     });
     clearTimeout(t);
     const d = await r.json();
