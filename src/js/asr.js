@@ -23,7 +23,6 @@ export async function startRecord() {
     });
 
     samples = [];
-    try { await AudioInput.removeAllListeners(); } catch {}
     AudioInput.addListener('audioData', (event) => {
       if (!recording) return;
       for (const sample of event.data) samples.push(sample);
@@ -44,7 +43,6 @@ export async function stopRecord() {
   try {
     const { AudioInput } = await import('cordova-plugin-audioinput');
     await AudioInput.stop();
-    try { await AudioInput.removeAllListeners(); } catch {}
   } catch {}
   if (samples.length < 500) { onResult?.(''); return; }
   try {

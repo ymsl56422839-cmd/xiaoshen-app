@@ -22,8 +22,21 @@ async function aiVision(b64) {
   return deepseekChat([{ role: 'system', content: mode.prompt }, ...chatMsgs]).then(r => { if (r) chatMsgs.push({ role: 'assistant', content: r }); return r; });
 }
 
-async function doSpeak(t) { setExpression('speaking'); await speak(t, mode.voice, () => { }, () => { }); setExpression('default'); if (callActive) startASRLoop(); }
+async function doSpeak(t) {
+  setExpression('speaking');
+  showOverlay('🦕 小深在回答...');
+  speak(t, mode.voice,
+    () => {},
+    () => {
+      setExpression('default');
+      hideOverlay();
+      if (callActive) startASRLoop();
+    }
+  );
+}
 function setStatus(t) { const e = document.getElementById('status-text'); if (e) e.textContent = t; }
+function showOverlay(t) { const e = document.getElementById('action-overlay'); if (e) { e.textContent = t; e.style.display = 'flex'; } }
+function hideOverlay() { const e = document.getElementById('action-overlay'); if (e) e.style.display = 'none'; }
 function showBubble(t) { const b = $('bubble'), tx = document.getElementById('bubble-text'); if (!b || !tx) return; tx.textContent = t; b.style.display = 'block'; clearTimeout(window._bb); window._bb = setTimeout(() => b.style.display = 'none', 12000); }
 
 // ========== HOME ==========
@@ -50,11 +63,11 @@ function showLogs() { const logs = getLogs(), el = $('diag-log-w'); if (!el) ret
 // ========== CALL MODE ==========
 async function startASRLoop() {
   if (!callActive || isSpeaking() || isRecording()) return;
+  showOverlay('🎤 正在听...');
   const ok = await startRecord();
-  if (!ok) setStatus('🎤 录音未就绪，请打字');
-  else setStatus('🎤 小深在听...');
+  if (!ok) { hideOverlay(); setStatus('🎤 录音未就绪，请打字'); }
 }
-function onASRResult(t) { if (callActive && !isSpeaking() && t) { setStatus('🤔 小深在想...'); processText(t); } else if (callActive && !isSpeaking()) { setStatus(''); startASRLoop(); } }
+function onASRResult(t) { hideOverlay(); if (callActive && !isSpeaking() && t) { setStatus('🤔 小深在想...'); processText(t); } else if (callActive && !isSpeaking()) { setStatus(''); startASRLoop(); } }
 async function processText(t) { addMsg('u', t); try { const r = await aiReply(t); if (r) { addMsg('a', r); doSpeak(r); } else startASRLoop(); } catch { addMsg('s', '网络出错了'); startASRLoop(); } }
 
 function enterCall() {
@@ -64,6 +77,7 @@ function enterCall() {
       <div class="chat-top"><button id="chat-back" class="chat-back">←</button><span class="chat-title">${mode.icon} ${mode.name}</span><span></span></div>
       <div class="chat-dino" id="chat-dino"></div>
       <div id="chat-msgs" class="chat-msgs"></div>
+      <div id="action-overlay" class="aol" style="display:none"></div>
       <div class="chat-status" id="status-text"></div>
       <div class="chat-input">
         <input id="chat-inp" class="chat-inp" placeholder="打字或直接说话，小深会用语音回复你～">
