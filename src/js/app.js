@@ -23,16 +23,14 @@ async function aiVision(b64) {
 }
 
 // speak returns immediately, onEnd callback handles next ASR loop
-function doSpeak(t) {
+async function doSpeak(t) {
   setExpression('speaking');
   showOverlay('🦕 小深在回答...');
-  speak(t, mode.voice,
-    () => {},  // onStart
-    () => {    // onEnd — audio truly finished, or was interrupted
-      setExpression('default');
-      hideOverlay();
-      if (callActive) startASRLoop();
-    }
+  await speak(t, mode.voice);
+  setExpression('default');
+  hideOverlay();
+  if (callActive) startASRLoop();
+}
   );
 }
 

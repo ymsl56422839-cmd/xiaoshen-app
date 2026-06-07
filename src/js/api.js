@@ -1,7 +1,7 @@
 const KEY = 'c5ef3d0d1b8b4c0b977bf9a12a25aee1.lztxLY3K3qWOkqJK';
 const DS_KEY = 'sk-f58d4a62a4ba4e6b903667ad83123191';
 const BASE = 'https://open.bigmodel.cn/api/paas/v4';
-const TIMEOUT = 8000;
+const TIMEOUT = 15000;
 
 async function fetchJson(url, opts) {
   const ctrl = new AbortController();
