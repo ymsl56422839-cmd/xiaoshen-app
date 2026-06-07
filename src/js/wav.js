@@ -1,52 +1,41 @@
-// Convert Int16 PCM array to WAV file → base64
-// 16kHz, mono, 16-bit
-export function pcmToWavBase64(samples, sampleRate = 16000) {
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
-  const blockAlign = numChannels * bitsPerSample / 8;
-  const dataSize = samples.length * 2;
-  const headerSize = 44;
-  const totalSize = headerSize + dataSize;
-
-  const buf = new ArrayBuffer(totalSize);
-  const view = new DataView(buf);
-
-  // RIFF header
-  writeStr(view, 0, 'RIFF');
-  view.setUint32(4, totalSize - 8, true);
-  writeStr(view, 8, 'WAVE');
-
-  // fmt chunk
-  writeStr(view, 12, 'fmt ');
-  view.setUint32(16, 16, true);        // chunk size
-  view.setUint16(20, 1, true);         // PCM format
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-
-  // data chunk
-  writeStr(view, 36, 'data');
-  view.setUint32(40, dataSize, true);
-
-  // PCM samples
-  for (let i = 0; i < samples.length; i++) {
-    view.setInt16(headerSize + i * 2, samples[i], true);
-  }
-
-  // Convert to base64
-  const bytes = new Uint8Array(buf);
-  let b64 = '';
-  for (let i = 0; i < bytes.length; i += 8192) {
-    b64 += String.fromCharCode(...bytes.slice(i, i + 8192));
-  }
-  return btoa(b64);
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('base64 encode failed'));
+    reader.readAsDataURL(blob);
+  });
 }
 
-function writeStr(view, offset, str) {
-  for (let i = 0; i < str.length; i++) {
-    view.setUint8(offset + i, str.charCodeAt(i));
+export async function pcmToWavBase64(samples, sampleRate = 16000) {
+  const channels = 1, bps = 16, bytesPerSample = bps / 8;
+  const dataSize = samples.length * channels * bytesPerSample;
+  const totalSize = 44 + dataSize;
+  const buf = new ArrayBuffer(totalSize);
+  const v = new DataView(buf);
+
+  // RIFF
+  v.setUint8(0,82);v.setUint8(1,73);v.setUint8(2,70);v.setUint8(3,70);       // "RIFF"
+  v.setUint32(4, totalSize - 8, true);
+  v.setUint8(8,87);v.setUint8(9,65);v.setUint8(10,86);v.setUint8(11,69);     // "WAVE"
+
+  // fmt
+  v.setUint8(12,102);v.setUint8(13,109);v.setUint8(14,116);v.setUint8(15,32); // "fmt "
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);                                                    // PCM
+  v.setUint16(22, channels, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * channels * bytesPerSample, true);               // byteRate
+  v.setUint16(32, channels * bytesPerSample, true);                            // blockAlign
+  v.setUint16(34, bps, true);
+
+  // data
+  v.setUint8(36,100);v.setUint8(37,97);v.setUint8(38,116);v.setUint8(39,97);  // "data"
+  v.setUint32(40, dataSize, true);
+
+  for (let i = 0; i < samples.length; i++) {
+    v.setInt16(44 + i * 2, Math.max(-32768, Math.min(32767, Math.round(samples[i]))), true);
   }
+
+  return blobToBase64(new Blob([buf], { type: 'audio/wav' }));
 }

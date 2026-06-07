@@ -46,7 +46,7 @@ export async function stopRecord() {
   } catch {}
   if (samples.length < 500) { onResult?.(''); return; }
   try {
-    const b64 = pcmToWavBase64(samples, 16000);
+    const b64 = await pcmToWavBase64(samples, 16000);
     const text = await asrTranscribe(b64);
     if (text?.trim()) onResult?.(text.trim());
     else onResult?.('');

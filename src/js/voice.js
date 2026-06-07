@@ -22,14 +22,18 @@ export function speak(text, voice, onStart, onEnd) {
     tryWithAudioContext(buf, done, onStart).then(ok => {
       if (ok) return;
       // Fallback: <audio> element
-      const blob = new Blob([buf], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-      cleanup = () => URL.revokeObjectURL(url);
-      a.src = url;
-      a.load();
-      a.onloadeddata = () => { setTimeout(() => a.play().catch(() => done()), 100); onStart?.(); };
-      a.onended = () => done();
-      a.onerror = () => done();
+    const blob = new Blob([buf], { type: 'audio/wav' });
+    const url = URL.createObjectURL(blob);
+    cleanup = () => URL.revokeObjectURL(url);
+    a.src = url;
+    a.load();
+    a.onloadedmetadata = () => {
+      // Skip WAV header (44 bytes ≈ 2.75ms at 16kHz 16bit mono)
+      try { a.currentTime = 0.01; } catch {}
+    };
+    a.onseeked = () => { a.play().catch(() => done()); onStart?.(); };
+    a.onended = () => done();
+    a.onerror = () => done();
     });
   }).catch(() => {
     a.src = `https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=${encodeURIComponent(text)}`;
