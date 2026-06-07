@@ -37,6 +37,12 @@ body{display:flex;justify-content:center;align-items:center}
 .ca{position:absolute;bottom:40px;left:0;right:0;display:flex;justify-content:center;z-index:3}
 .hangup{width:66px;height:66px;border-radius:50%;border:none;background:#FF3B30;color:#fff;font-size:1.5em;cursor:pointer;box-shadow:0 4px 16px rgba(255,59,48,.4)}
 .hangup:active{transform:scale(.9)}
+/* Text fallback */
+.tf{position:absolute;bottom:120px;left:16px;right:16px;display:flex;gap:8px;z-index:5;background:rgba(255,255,255,.9);padding:8px;border-radius:16px}
+.tfi{flex:1;padding:12px 14px;border:2px solid #f0e0d0;border-radius:25px;font-size:.9em;font-family:inherit;outline:none;background:white}
+.tfi:focus{border-color:var(--or)}
+.tfb{padding:12px 20px;border:none;border-radius:25px;background:var(--or);color:#fff;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;font-size:.9em}
+.tfb:active{background:var(--od)}
 
 /* CAMERA */
 .cam{height:100%;position:relative;background:#000;overflow:hidden}

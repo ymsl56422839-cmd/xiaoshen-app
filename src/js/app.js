@@ -28,8 +28,13 @@ async function doSpeak(t){
 }
 
 async function startASRLoop(){
-  if(!callActive||isSpeaking())return;setStatus('🎤 小深在听...');
-  const ok=await startRecord();if(!ok)setStatus('⌨️ 麦克风不可用: '+lastError());else showErr('');
+  if(!callActive||isSpeaking())return;
+  const ok=await startRecord();
+  if(!ok){
+    setStatus('⌨️ 麦克风不可用，请在下面打字');
+    showErr(lastError());
+    showTextInput();
+  } else { showErr(''); hideTextInput(); setStatus('🎤 小深在听...'); }
 }
 function stopASRLoop(){stopRecord();}
 function onASRResult(t){if(callActive&&!isSpeaking()&&t){setStatus('🤔 小深在想...');processMessage(t);}}
@@ -37,6 +42,16 @@ async function processMessage(t){try{const r=await aiReply(t);if(r)doSpeak(r);el
 
 function setStatus(t){const e=document.getElementById('status-text');if(e)e.textContent=t;}
 function showErr(t){const e=document.getElementById('err-bar');if(e){if(t){e.textContent='⚠️ '+t;e.style.display='block';}else{e.style.display='none';}}}
+function showTextInput(){
+  const e=document.getElementById('text-fallback');if(e)e.style.display='flex';
+}
+function hideTextInput(){
+  const e=document.getElementById('text-fallback');if(e)e.style.display='none';
+}
+function sendText(){
+  const inp=document.getElementById('text-inp'),v=inp?.value?.trim();if(!v)return;inp.value='';
+  processMessage(v);
+}
 function showBubble(t){const b=$('bubble'),tx=document.getElementById('bubble-text');if(!b||!tx)return;tx.textContent=t;b.style.display='block';clearTimeout(window._bb);window._bb=setTimeout(()=>b.style.display='none',12000);}
 
 function showHome(){
@@ -65,9 +80,9 @@ function showLogs(){
 
 function enterCall(){
   callActive=true;chatMsgs=[];
-  $('app').innerHTML=`<div class="call"><div id="err-bar" class="err-bar" style="display:none"></div><div id="dino-call"><span style="font-size:3em">🦕</span></div><div id="status-text" class="st">🦕 小深正在连接...</div><div id="bubble" class="bub" style="display:none"><span id="bubble-text"></span></div><div class="ca"><button id="hangup-btn" class="hangup">🔴 挂断</button></div></div>`;
+  $('app').innerHTML=`<div class="call"><div id="err-bar" class="err-bar" style="display:none"></div><div id="dino-call"><span style="font-size:3em">🦕</span></div><div id="status-text" class="st">🦕 小深正在连接...</div><div id="bubble" class="bub" style="display:none"><span id="bubble-text"></span></div><div id="text-fallback" class="tf" style="display:none"><input id="text-inp" class="tfi" placeholder="打字跟小深聊天..."><button id="text-send" class="tfb">发送</button></div><div class="ca"><button id="hangup-btn" class="hangup">🔴 挂断</button></div></div>`;
   setTimeout(()=>{try{initAvatar('dino-call');initVoice();initASR({onResult:onASRResult});}catch(e){setStatus('加载失败:'+e.message);}},100);
-  setTimeout(()=>{try{$('hangup-btn')?.addEventListener('click',showHome);}catch{}},200);
+  setTimeout(()=>{try{$('hangup-btn')?.addEventListener('click',showHome);$('text-send')?.addEventListener('click',sendText);$('text-inp')?.addEventListener('keydown',e=>{if(e.key==='Enter')sendText();});}catch{}},200);
   setTimeout(async()=>{try{const r=await deepseekChat([{role:'system',content:mode.prompt},{role:'user',content:'你好！'}]);if(r){chatMsgs.push({role:'assistant',content:r});doSpeak(r);}else{setStatus('🎤 准备好了');startASRLoop();}}catch(e){setStatus('⚠️ 网络失败');showErr(e.message);}},600);
 }
 
