@@ -1,15 +1,26 @@
 import { ttsSpeak } from './api.js';
 
-let audioEl, speaking = false;
-export function init() { audioEl = new Audio(); }
+let speaking = false;
+export function init() {}
 export function isSpeaking() { return speaking; }
 
-export async function speak(text, voice = 'tongtong', startCb, endCb) {
+export async function speak(text, voice = 'female', startCb, endCb) {
+  // Try GLM-TTS first
+  let ok = await tryGLMTTS(text, voice);
+  if (!ok) ok = await tryWebSpeech(text);
+  if (!ok) ok = await tryGoogleTTS(text);
+
   startCb?.();
-  const ok = await tryGLMTTS(text, voice) || await tryWebSpeech(text) || await tryGoogleTTS(text);
-  if (!ok) endCb?.(); // all failed, caller should show text bubble
-  const origEndCb = endCb;
-  endCb = () => { speaking = false; origEndCb?.(); };
+  speaking = true;
+
+  // Wait for playback to finish
+  if (ok) {
+    ok.addEventListener('ended', () => { speaking = false; endCb?.(); }, { once: true });
+    ok.addEventListener('error', () => { speaking = false; endCb?.(); }, { once: true });
+  } else {
+    speaking = false;
+    endCb?.();
+  }
 }
 
 async function tryGLMTTS(text, voice) {
@@ -17,39 +28,43 @@ async function tryGLMTTS(text, voice) {
     const buf = await ttsSpeak(text, voice);
     const blob = new Blob([buf], { type: 'audio/mp3' });
     const url = URL.createObjectURL(blob);
-    return await playAudio(url);
-  } catch { return false; }
+    return await playAudio(url, true);
+  } catch { return null; }
 }
 
 function tryWebSpeech(text) {
-  if (!('speechSynthesis' in window)) return false;
+  if (!('speechSynthesis' in window)) return null;
   return new Promise(resolve => {
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'zh-CN'; u.rate = 1.0;
-    u.onstart = () => { speaking = true; };
-    u.onend = () => { speaking = false; resolve(true); };
-    u.onerror = () => { speaking = false; resolve(false); };
+    let resolved = false;
+    u.onend = () => { if (!resolved) { resolved = true; resolve(true); } };
+    u.onerror = () => { if (!resolved) { resolved = true; resolve(false); } };
     speechSynthesis.speak(u);
-  });
+    setTimeout(() => { if (!resolved) { resolved = true; resolve(false); } }, 15000);
+  }).then(ok => ok ? 'webspeech' : null);
 }
 
 function tryGoogleTTS(text) {
   const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=${encodeURIComponent(text)}`;
-  return playAudio(url);
+  return playAudio(url, false);
 }
 
-function playAudio(url) {
+async function playAudio(url, revoke) {
   return new Promise(resolve => {
-    if (!audioEl) audioEl = new Audio();
-    audioEl.src = url;
-    audioEl.onplay = () => { speaking = true; };
-    audioEl.onended = () => { speaking = false; resolve(true); URL.revokeObjectURL(url); };
-    audioEl.onerror = () => { speaking = false; resolve(false); };
-    audioEl.play().catch(() => { speaking = false; resolve(false); });
+    const a = new Audio();
+    a.preload = 'auto';
+    a.src = url;
+    a.oncanplaythrough = () => {
+      a.play().then(() => resolve(a)).catch(() => resolve(null));
+    };
+    a.onerror = () => resolve(null);
+    a.load();
+    setTimeout(() => resolve(null), 12000);
+    if (revoke) { a.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true }); }
   });
 }
 
 export function stopAll() {
-  try { audioEl?.pause(); audioEl && (audioEl.src = ''); } catch {}
   try { speechSynthesis.cancel(); } catch {}
 }
