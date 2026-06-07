@@ -1,6 +1,5 @@
-const KEY = 'xiaoshen_v3';
-
-const D = { modes: 'chat', lastVisit: '' };
+const KEY = 'xiaoshen_v4';
+const D = { modes: 'chat' };
 
 export function get() {
   try { const r = localStorage.getItem(KEY); return r ? { ...D, ...JSON.parse(r) } : { ...D }; }
@@ -9,9 +8,7 @@ export function get() {
 
 export function set(partial) {
   const cur = get();
-  const updated = { ...cur, ...partial };
-  try { localStorage.setItem(KEY, JSON.stringify(updated)); } catch {}
-  return updated;
+  try { localStorage.setItem(KEY, JSON.stringify({ ...cur, ...partial })); } catch {}
 }
 
 export function getMode() { return get().modes; }

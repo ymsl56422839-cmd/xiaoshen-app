@@ -1,105 +1,62 @@
-import { TextToSpeech } from '@capacitor-community/text-to-speech';
-import { SpeechRecognition } from '@capacitor-community/speech-recognition';
-import { getVoice } from './prompts.js';
+import { ttsSpeak } from './api.js';
 
-let voiceCfg = { pitch:1.0, rate:1.0 };
-let onResult = null;
-let onState = null;
 let audioEl = null;
+let speaking = false;
 
-export function init(cbs) {
-  onResult = cbs.onResult;
-  onState = cbs.onState;
+export function init() {
   audioEl = new Audio();
 }
 
-export function setVoice(id) {
-  const v = getVoice(id);
-  if (v) { voiceCfg = v; }
-}
+export function isSpeaking() { return speaking; }
 
-export async function startListen() {
+export async function speak(text, voice = 'tongtong', startCb, endCb) {
   try {
-    await SpeechRecognition.requestPermissions();
-    const { available } = await SpeechRecognition.available();
-    if (!available) { onState?.('noapi'); return; }
-    await SpeechRecognition.start({ language: 'zh-CN', maxResults: 1, popup: false });
-    onState?.('listening');
-  } catch { onState?.('error'); }
-}
+    // Try GLM-TTS first
+    const buf = await ttsSpeak(text, voice);
+    const blob = new Blob([buf], { type: 'audio/mp3' });
+    const url = URL.createObjectURL(blob);
 
-export async function stopListen() {
-  try {
-    const { matches } = await SpeechRecognition.stop();
-    SpeechRecognition.removeAllListeners();
-    if (matches?.length) onResult?.(matches[0], '');
-  } catch {}
-  onState?.('end');
-}
-
-// TTS: 3-layer fallback
-export function speak(text, startCb, endCb) {
-  tryNative(text, startCb, endCb);
-}
-
-async function tryNative(text, startCb, endCb) {
-  try {
-    await TextToSpeech.speak({
-      text, lang: 'zh-CN', rate: voiceCfg.rate, pitch: voiceCfg.pitch, volume: 1.0
-    });
-    startCb?.();
-    endCb?.();
-  } catch {
-    // Fallback 1: Web Speech API
-    tryWebSpeech(text, startCb, endCb);
-  }
-}
-
-function tryWebSpeech(text, startCb, endCb) {
-  if (!('speechSynthesis' in window)) {
-    tryGoogleTTS(text, startCb, endCb);
-    return;
-  }
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'zh-CN'; u.pitch = voiceCfg.pitch; u.rate = voiceCfg.rate;
-  u.onstart = ()=>startCb?.();
-  u.onend = ()=>endCb?.();
-  u.onerror = ()=>tryGoogleTTS(text, startCb, endCb);
-  speechSynthesis.speak(u);
-}
-
-function tryGoogleTTS(text, startCb, endCb) {
-  const chunks = splitText(text, 180);
-  let i = 0;
-  startCb?.();
-  function play() {
-    if (i >= chunks.length) { endCb?.(); return; }
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=${encodeURIComponent(chunks[i])}`;
     if (!audioEl) audioEl = new Audio();
+    stopAll();
     audioEl.src = url;
-    audioEl.onended = ()=>{ i++; play(); };
-    audioEl.onerror = ()=>{ i++; play(); };
-    audioEl.play().catch(()=>{ i++; play(); });
+    audioEl.onplay = () => { speaking = true; startCb?.(); };
+    audioEl.onended = () => { speaking = false; endCb?.(); URL.revokeObjectURL(url); };
+    audioEl.onerror = () => { speaking = false; fallbackTTS(text, startCb, endCb); };
+    await audioEl.play();
+  } catch {
+    fallbackTTS(text, startCb, endCb);
   }
-  play();
 }
 
-function splitText(text, max) {
-  const parts = []; let r = text;
-  while (r.length) {
-    if (r.length <= max) { parts.push(r); break; }
-    let cut = max;
-    for (const b of ['。','！','？','，','.',',','!','?']) {
-      const idx = r.lastIndexOf(b, max);
-      if (idx > max*0.5) { cut = idx+1; break; }
-    }
-    parts.push(r.slice(0, cut)); r = r.slice(cut);
+function fallbackTTS(text, startCb, endCb) {
+  // Android native (via Capacitor plugin or Web Speech)
+  if ('speechSynthesis' in window) {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-CN'; u.rate = 1.0; u.pitch = 1.1;
+    u.onstart = () => { speaking = true; startCb?.(); };
+    u.onend = () => { speaking = false; endCb?.(); };
+    u.onerror = () => { speaking = false; googleFallback(text, startCb, endCb); };
+    speechSynthesis.speak(u);
+  } else {
+    googleFallback(text, startCb, endCb);
   }
-  return parts;
 }
 
-export function stopSpeak() {
-  try { TextToSpeech.stop(); } catch {}
-  try { speechSynthesis.cancel(); } catch {}
-  try { if (audioEl) { audioEl.pause(); audioEl.src=''; } } catch {}
+function googleFallback(text, startCb, endCb) {
+  startCb?.();
+  speaking = true;
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=${encodeURIComponent(text)}`;
+  if (!audioEl) audioEl = new Audio();
+  audioEl.src = url;
+  audioEl.onended = () => { speaking = false; endCb?.(); };
+  audioEl.onerror = () => { speaking = false; endCb?.(); };
+  audioEl.play().catch(() => { speaking = false; endCb?.(); });
+}
+
+export function stopAll() {
+  try {
+    if (audioEl) { audioEl.pause(); audioEl.src = ''; }
+    speechSynthesis.cancel();
+  } catch {}
+  speaking = false;
 }
