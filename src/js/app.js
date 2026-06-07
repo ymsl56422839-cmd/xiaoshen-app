@@ -54,7 +54,7 @@ async function startASRLoop() {
   if (!ok) setStatus('🎤 录音未就绪，请打字');
   else setStatus('🎤 小深在听...');
 }
-function onASRResult(t) { if (callActive && !isSpeaking() && t) { setStatus('🤔 小深在想...'); processText(t); } }
+function onASRResult(t) { if (callActive && !isSpeaking() && t) { setStatus('🤔 小深在想...'); processText(t); } else if (callActive && !isSpeaking()) { setStatus(''); startASRLoop(); } }
 async function processText(t) { try { const r = await aiReply(t); if (r) { addMsg('a', r); doSpeak(r); } else startASRLoop(); } catch { addMsg('s', '网络出错了'); startASRLoop(); } }
 
 function enterCall() {

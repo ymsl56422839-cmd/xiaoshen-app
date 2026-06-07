@@ -27,12 +27,13 @@ export async function stopRecord() {
   try {
     const { Microphone } = await import('@mozartec/capacitor-microphone');
     const r = await Microphone.stopRecording();
-    const b64 = r?.base64String || r?.dataUrl?.replace(/^data:audio\/\w+;base64,/, '');
-    if (b64) {
+    logErr('录音返回:' + JSON.stringify(Object.keys(r||{})), 'ASR');
+    const b64 = r?.base64String || r?.dataUrl?.replace(/^data:audio\/\w+;base64,/, '') || r?.value?.recordDataBase64 || '';
+    if (b64?.length > 100) {
       const text = await asrTranscribe(b64);
       if (text?.trim()) onResult?.(text.trim());
-    }
-  } catch (e) { logErr('录音识别:' + e.message, 'ASR'); }
+    } else { logErr('录音无数据, keys:' + JSON.stringify(Object.keys(r||{})), 'ASR'); onResult?.(''); }
+  } catch (e) { logErr('录音识别:' + e.message, 'ASR'); onResult?.(''); }
 }
 
 export function isRecording() { return recording; }
