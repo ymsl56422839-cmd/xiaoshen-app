@@ -25,14 +25,10 @@ async function aiVision(b64) {
 async function doSpeak(t) {
   setExpression('speaking');
   showOverlay('🦕 小深在回答...');
-  speak(t, mode.voice,
-    () => {},
-    () => {
-      setExpression('default');
-      hideOverlay();
-      if (callActive) startASRLoop();
-    }
-  );
+  await speak(t, mode.voice);
+  setExpression('default');
+  hideOverlay();
+  if (callActive) startASRLoop();
 }
 function setStatus(t) { const e = document.getElementById('status-text'); if (e) e.textContent = t; }
 function showOverlay(t) { const e = document.getElementById('action-overlay'); if (e) { e.textContent = t; e.style.display = 'flex'; } }
