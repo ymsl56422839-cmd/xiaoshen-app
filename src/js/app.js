@@ -1,5 +1,7 @@
 import { deepseekChat, visionDescribe } from './api.js';
 import { MODES, getMode } from './prompts.js';
+import { VERSION } from './config.js';
+import { runDiagnostics } from './diagnose.js';
 import { init as initVoice, speak, stopAll, isSpeaking } from './voice.js';
 import { init as initASR, startRecord, stopRecord } from './asr.js';
 import { initAvatar, setExpression } from './avatar.js';
@@ -7,156 +9,148 @@ import { getMode as savedMode, setMode } from './storage.js';
 
 const $ = id => document.getElementById(id);
 
-let mode = getMode(savedMode());
-let chatMsgs = [];
-let camOn = false;
-let callActive = false;
-let asrTimer = null;
+let mode = getMode(savedMode()), chatMsgs = [], camOn = false, callActive = false;
 
-// ===== Chat =====
-async function aiReply(userText) {
-  chatMsgs.push({ role:'user', content:userText });
-  if (chatMsgs.length > 12) chatMsgs = chatMsgs.slice(-12);
-  const msgs = [{ role:'system', content: mode.prompt }, ...chatMsgs];
-  const reply = await deepseekChat(msgs);
+// === Chat helpers ===
+async function aiReply(text) {
+  chatMsgs.push({ role:'user', content:text });
+  if (chatMsgs.length > 14) chatMsgs = chatMsgs.slice(-14);
+  return await deepseekChat([{ role:'system', content:mode.prompt }, ...chatMsgs]).then(r => { if (r) chatMsgs.push({ role:'assistant', content:r }); return r; });
+}
+
+async function aiVision(img) {
+  const desc = await visionDescribe(img);
+  if (!desc) return '';
+  chatMsgs.push({ role:'user', content:`[孩子展示：${desc}]` });
+  if (chatMsgs.length > 14) chatMsgs = chatMsgs.slice(-14);
+  const reply = await deepseekChat([{ role:'system', content:mode.prompt }, ...chatMsgs]);
   if (reply) chatMsgs.push({ role:'assistant', content:reply });
   return reply;
 }
 
-async function aiVision(base64) {
-  const desc = await visionDescribe(base64);
-  if (!desc) return;
-  const msg = `[孩子给你看了画面：${desc}]`;
-  chatMsgs.push({ role:'user', content:msg });
-  if (chatMsgs.length > 12) chatMsgs = chatMsgs.slice(-12);
-  const msgs = [{ role:'system', content:mode.prompt }, ...chatMsgs];
-  const reply = await deepseekChat(msgs);
-  if (reply) chatMsgs.push({ role:'assistant', content:reply });
-  return reply;
-}
-
-// ===== TTS helper =====
-function doSpeak(text, voice) {
+// === TTS + text fallback ===
+async function doSpeak(text) {
   setExpression('speaking');
-  speak(text, voice||mode.voice,
-    ()=>{ setExpression('speaking'); },
-    ()=>{
-      setExpression('default');
-      if (callActive) startASRLoop();
-    }
-  );
+  const ok = await speak(text, mode.voice, () => {}, () => {});
+  setExpression('default');
+  showBubble(text);
+  if (!ok) setStatus('🔇 语音暂不可用，请看文字');
+  if (callActive) startASRLoop();
 }
 
-// ===== ASR loop (phone call) =====
+// === ASR loop ===
 async function startASRLoop() {
-  if (!callActive) return;
-  updateStatus('🎤 小深在听...');
-  const ok = await startRecord();
-  if (!ok) { updateStatus('⌨️ 麦克风未授权，请打字'); return; }
-}
-
-function stopASRLoop() {
-  stopRecord();
-  clearTimeout(asrTimer);
-}
-
-function onASRResult(text) {
   if (!callActive || isSpeaking()) return;
-  updateStatus('🤔 小深在想...');
-  processMessage(text);
+  setStatus('🎤 小深在听...');
+  const ok = await startRecord();
+  if (!ok) setStatus('⌨️ 麦克风未就绪，请打字');
 }
 
+function stopASRLoop() { stopRecord(); }
+function onASRResult(text) { if (callActive && !isSpeaking() && text) { setStatus('🤔 小深在想...'); processMessage(text); } }
 async function processMessage(text) {
-  try {
-    const reply = await aiReply(text);
-    if (reply) { showBubble(reply); doSpeak(reply, mode.voice); }
-    else { updateStatus('🎤 小深在听...'); startASRLoop(); }
-  } catch { updateStatus('🎤 小深在听...'); startASRLoop(); }
+  try { const reply = await aiReply(text); if (reply) doSpeak(reply); else startASRLoop(); }
+  catch { setStatus('⚠️ 网络错误，重试中...'); startASRLoop(); }
 }
 
-function updateStatus(t) {
-  const st = document.getElementById('status-text');
-  if (st) st.textContent = t;
-}
-
+// === UI helpers ===
+function setStatus(t) { const e = document.getElementById('status-text'); if (e) e.textContent = t; }
 function showBubble(text) {
-  const b = $('bubble');
-  const t = document.getElementById('bubble-text');
-  if (!b||!t) return;
-  t.textContent = text;
-  b.style.display = 'block';
-  clearTimeout(window._bub);
-  window._bub = setTimeout(()=>{ b.style.display='none'; }, 10000);
+  const b = $('bubble'), t = document.getElementById('bubble-text');
+  if (!b || !t) return; t.textContent = text; b.style.display = 'block';
+  clearTimeout(window._bb); window._bb = setTimeout(() => b.style.display = 'none', 12000);
+}
+function toast(m) {
+  let el = $('toast'); if (!el) { el = document.createElement('div'); el.id = 'toast'; el.className = 'toast'; document.body.appendChild(el); }
+  el.textContent = m; el.classList.add('show');
+  clearTimeout(window._to); window._to = setTimeout(() => el.classList.remove('show'), 2000);
 }
 
-// ===== Home Screen =====
+// ========== HOME ==========
 function showHome() {
-  callActive = false; camOn = false; chatMsgs = []; stopAll(); stopASRLoop();
+  callActive = false; camOn = false; stopAll(); stopASRLoop(); chatMsgs = [];
   mode = getMode(savedMode());
-
   let cards = MODES.map(m => `<button class="mc${mode.id===m.id?' sel':''}" data-id="${m.id}"><span class="mci">${m.icon}</span><span class="mcn">${m.name}</span></button>`).join('');
 
   $('app').innerHTML = `
 <div class="home">
-  <div class="ht">
-    <div id="dino-home"></div>
-    <div class="hg">你好呀，小朋友！</div>
-    <div class="hs">🦕 我是小深，你的AI小伙伴</div>
-  </div>
+  <div class="ht"><div id="dino-home"></div><div class="hg">你好呀，小朋友！</div><div class="hs">🦕 我是小深，你的AI小伙伴</div></div>
   <div class="mg">${cards}</div>
-  <div class="ha">
-    <button id="call-btn" class="big-btn c-orange">📞 打电话</button>
-    <button id="cam-btn" class="big-btn c-green">📹 视频通话</button>
-  </div>
+  <div class="ha"><button id="call-btn" class="big-btn c-orange">📞 打电话</button><button id="cam-btn" class="big-btn c-green">📹 视频通话</button></div>
+  <div class="ver">v${VERSION}</div>
 </div>
 <div id="toast" class="toast"></div>`;
 
-  initAvatar('dino-home');
-  setExpression('default');
+  initAvatar('dino-home'); setExpression('default');
 
-  document.querySelectorAll('.mc').forEach(c=>{
-    c.addEventListener('click', ()=>{
-      mode = getMode(c.dataset.id);
-      setMode(mode.id);
-      showToast(`已切换到「${mode.name}」`);
-      showHome();
-    });
-  });
+  document.querySelectorAll('.mc').forEach(c => c.addEventListener('click', () => {
+    mode = getMode(c.dataset.id); setMode(mode.id); toast(`已切换「${mode.name}」`); showHome();
+  }));
+
+  // Long-press → diagnose
+  let pressTimer;
+  const dino = document.getElementById('dino-home');
+  if (dino) {
+    dino.addEventListener('pointerdown', () => { pressTimer = setTimeout(showDiagnose, 3000); });
+    dino.addEventListener('pointerup', () => clearTimeout(pressTimer));
+    dino.addEventListener('pointerleave', () => clearTimeout(pressTimer));
+  }
 
   $('call-btn').addEventListener('click', enterCall);
   $('cam-btn').addEventListener('click', enterVideo);
 }
 
-// ===== Call Mode =====
-function enterCall() {
-  try {
-  callActive = true; camOn = false; chatMsgs = [];
+// ========== DIAGNOSE ==========
+async function showDiagnose() {
+  toast('🔧 正在诊断...');
   $('app').innerHTML = `
-<div class="call">
-  <div id="dino-call" style="flex:1;display:flex;align-items:center;justify-content:center"><span style="font-size:3em">🦕</span></div>
-  <div id="status-text" class="st">🦕 小深正在连接...</div>
-  <div id="bubble" class="bub" style="display:none"><span id="bubble-text"></span></div>
-  <div class="ca">
-    <button id="hangup-btn" class="hangup">🔴 挂断</button>
-  </div>
+<div class="diag">
+  <div class="diag-head"><button id="diag-back" class="diag-back">← 返回</button><span>🔧 诊断中心</span><span>v${VERSION}</span></div>
+  <div class="diag-list" id="diag-list"><div class="diag-item">⏳ 检测中...</div></div>
+  <div class="diag-act"><button id="diag-retry" class="big-btn c-orange" style="max-width:240px">🔄 重新检测</button></div>
 </div>`;
 
-  setTimeout(()=>{ try { initAvatar('dino-call'); initVoice(); initASR({ onResult: onASRResult }); } catch(e){ updateStatus('加载失败:'+e.message); } }, 100);
-  setTimeout(()=>{ try { $('hangup-btn')?.addEventListener('click', showHome); } catch{} }, 200);
+  $('diag-back').addEventListener('click', showHome);
+  $('diag-retry').addEventListener('click', showDiagnose);
 
-  // AI greets
-  setTimeout(async ()=>{
-    try {
-    const msgs = [{ role:'system', content: mode.prompt }, { role:'user', content:'你好！' }];
-    const reply = await deepseekChat(msgs);
-    if (reply) { chatMsgs.push({ role:'assistant', content:reply }); showBubble(reply); doSpeak(reply, mode.voice); }
-    else { startASRLoop(); }
-    } catch(e){ updateStatus('网络错误:'+e.message); }
-  }, 600);
-  } catch(e){ showToast('打电话出错:'+e.message); }
+  const list = $('diag-list');
+  list.innerHTML = '<div class="diag-item">⏳ 检测中...</div>';
+
+  const results = await runDiagnostics();
+  list.innerHTML = results.map(r =>
+    `<div class="diag-item"><span class="diag-icon">${r.ok?'✅':'❌'}</span><span class="diag-name">${r.name}</span><span class="diag-ms">${r.ms}ms</span><span class="diag-detail">${r.d}</span></div>`
+  ).join('');
 }
 
-// ===== Video Mode =====
+// ========== CALL MODE ==========
+function enterCall() {
+  try {
+    callActive = true; camOn = false; chatMsgs = [];
+    $('app').innerHTML = `
+<div class="call">
+  <div id="dino-call"><span style="font-size:3em">🦕</span></div>
+  <div id="status-text" class="st">🦕 小深正在连接...</div>
+  <div id="bubble" class="bub" style="display:none"><span id="bubble-text"></span></div>
+  <div class="ca"><button id="hangup-btn" class="hangup">🔴 挂断</button></div>
+</div>
+<div id="toast" class="toast"></div>`;
+
+    setTimeout(() => { try { initAvatar('dino-call'); initVoice(); initASR({ onResult: onASRResult }); } catch (e) { setStatus('加载失败: ' + e.message); } }, 100);
+    setTimeout(() => { try { $('hangup-btn')?.addEventListener('click', showHome); } catch {} }, 200);
+
+    setTimeout(async () => {
+      try {
+        const msgs = [{ role:'system', content:mode.prompt }, { role:'user', content:'你好！' }];
+        const reply = await deepseekChat(msgs);
+        if (reply) { chatMsgs.push({ role:'assistant', content:reply }); doSpeak(reply); }
+        else { setStatus('🎤 准备好了，请说话～'); startASRLoop(); }
+      } catch { setStatus('⚠️ 网络连接失败，请检查后重试'); }
+    }, 600);
+
+  } catch (e) { toast('出错: ' + e.message); showHome(); }
+}
+
+// ========== VIDEO MODE ==========
 let visionTimer = null;
 
 async function enterVideo() {
@@ -166,64 +160,55 @@ async function enterVideo() {
   <div class="cw"><video id="cam-video" autoplay playsinline muted></video><canvas id="cam-canvas" style="display:none"></canvas></div>
   <div class="co">
     <div id="dino-cam" style="width:70px;height:70px"></div>
-    <div id="status-text" class="st cam-st">📷 正在连接...</div>
+    <div id="status-text" class="st cam-st">📷 正在启动摄像头...</div>
     <div id="bubble" class="bub cam-bub" style="display:none"><span id="bubble-text"></span></div>
   </div>
-  <div class="ca cam-ca">
-    <button id="hangup-btn" class="hangup">🔴 挂断</button>
-  </div>
-</div>
-<div id="toast" class="toast"></div>`;
+  <div class="ca cam-ca"><button id="hangup-btn" class="hangup">🔴 挂断</button></div>
+</div>`;
 
   initAvatar('dino-cam');
   initVoice();
   initASR({ onResult: onASRResult });
 
-  // Start camera
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video:{facingMode:'environment',width:{ideal:640},height:{ideal:480}}, audio:false });
-    $('cam-video').srcObject = stream;
-    await $('cam-video').play();
-  } catch { updateStatus('📷 摄像头未授权'); }
-
-  $('hangup-btn').addEventListener('click', ()=>{
-    const v = $('cam-video');
-    if (v?.srcObject) v.srcObject.getTracks().forEach(t=>t.stop());
-    clearInterval(visionTimer);
-    showHome();
+  $('hangup-btn').addEventListener('click', () => {
+    const v = $('cam-video'); if (v?.srcObject) v.srcObject.getTracks().forEach(t => t.stop());
+    clearInterval(visionTimer); showHome();
   });
 
-  // AI greets
-  setTimeout(async ()=>{
-    const msgs = [{ role:'system', content: mode.prompt }, { role:'user', content:'我们开始视频聊天吧！' }];
-    const reply = await deepseekChat(msgs);
-    if (reply) { chatMsgs.push({ role:'assistant', content:reply }); showBubble(reply); doSpeak(reply, mode.voice); }
-    else { startASRLoop(); }
-  }, 600);
+  // Camera
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+    const v = $('cam-video');
+    if (v) { v.srcObject = stream; await v.play(); setStatus('📷 摄像头已就绪'); }
+  } catch (e) {
+    setStatus('⚠️ 摄像头未授权或不可用，请在设置中允许');
+    if (e.name === 'NotAllowedError') setStatus('🔒 摄像头权限被拒绝，请到系统设置开启');
+  }
+
+  // Greeting
+  setTimeout(async () => {
+    try {
+      const reply = await deepseekChat([{ role:'system', content:mode.prompt }, { role:'user', content:'我们开始视频聊天吧！' }]);
+      if (reply) { chatMsgs.push({ role:'assistant', content:reply }); doSpeak(reply); }
+      else startASRLoop();
+    } catch { setStatus('⚠️ 网络错误'); startASRLoop(); }
+  }, 800);
 
   // Vision loop
-  visionTimer = setInterval(async ()=>{
+  visionTimer = setInterval(async () => {
     if (!callActive || isSpeaking()) return;
     const v = $('cam-video'), c = $('cam-canvas');
-    if (!v||!c) return;
-    c.width = v.videoWidth||640; c.height = v.videoHeight||480;
-    c.getContext('2d').drawImage(v,0,0,c.width,c.height);
-    const b64 = c.toDataURL('image/jpeg',0.7).split(',')[1];
+    if (!v || !c || !v.videoWidth) return;
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+    const b64 = c.toDataURL('image/jpeg', 0.6).split(',')[1];
     try {
-      updateStatus('🔍 让我看看...');
+      setStatus('🔍 让我看看...');
       const reply = await aiVision(b64);
-      if (reply) { showBubble(reply); stopASRLoop(); doSpeak(reply, mode.voice); }
-    } catch {}
+      if (reply) { showBubble(reply); stopASRLoop(); doSpeak(reply); }
+    } catch { setStatus('⚠️ 识图失败，继续尝试'); }
   }, 6000);
 }
 
-// ===== Toast =====
-function showToast(m) {
-  let t = $('toast');
-  if (!t) { t=document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
-  t.textContent=m; t.classList.add('show');
-  clearTimeout(window._t); window._t=setTimeout(()=>t.classList.remove('show'),2000);
-}
-
-// ===== Boot =====
+// ========== BOOT ==========
 showHome();
