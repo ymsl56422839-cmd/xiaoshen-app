@@ -129,31 +129,31 @@ function showHome() {
 
 // ===== Call Mode =====
 function enterCall() {
+  try {
   callActive = true; camOn = false; chatMsgs = [];
   $('app').innerHTML = `
 <div class="call">
-  <div id="dino-call" style="flex:1;display:flex;align-items:center;justify-content:center"></div>
+  <div id="dino-call" style="flex:1;display:flex;align-items:center;justify-content:center"><span style="font-size:3em">🦕</span></div>
   <div id="status-text" class="st">🦕 小深正在连接...</div>
   <div id="bubble" class="bub" style="display:none"><span id="bubble-text"></span></div>
   <div class="ca">
     <button id="hangup-btn" class="hangup">🔴 挂断</button>
   </div>
-</div>
-<div id="toast" class="toast"></div>`;
+</div>`;
 
-  initAvatar('dino-call');
-  initVoice();
-  initASR({ onResult: onASRResult });
-
-  $('hangup-btn').addEventListener('click', showHome);
+  setTimeout(()=>{ try { initAvatar('dino-call'); initVoice(); initASR({ onResult: onASRResult }); } catch(e){ updateStatus('加载失败:'+e.message); } }, 100);
+  setTimeout(()=>{ try { $('hangup-btn')?.addEventListener('click', showHome); } catch{} }, 200);
 
   // AI greets
   setTimeout(async ()=>{
+    try {
     const msgs = [{ role:'system', content: mode.prompt }, { role:'user', content:'你好！' }];
     const reply = await deepseekChat(msgs);
     if (reply) { chatMsgs.push({ role:'assistant', content:reply }); showBubble(reply); doSpeak(reply, mode.voice); }
     else { startASRLoop(); }
+    } catch(e){ updateStatus('网络错误:'+e.message); }
   }, 600);
+  } catch(e){ showToast('打电话出错:'+e.message); }
 }
 
 // ===== Video Mode =====
