@@ -2,7 +2,7 @@ import { deepseekChat, visionDescribe } from './api.js';
 import { MODES, getMode } from './prompts.js';
 import { VERSION } from './config.js';
 import { runDiagnostics } from './diagnose.js';
-import { init as initVoice, speak, stopAll, isSpeaking } from './voice.js';
+import { init as initVoice, speak, stopSpeak, stopAll, isSpeaking } from './voice.js';
 import { init as initASR, startRecord, stopRecord, isRecording } from './asr.js';
 import { initAvatar, setExpression } from './avatar.js';
 import { getMode as savedMode, setMode } from './storage.js';
@@ -22,17 +22,24 @@ async function aiVision(b64) {
   return deepseekChat([{ role: 'system', content: mode.prompt }, ...chatMsgs]).then(r => { if (r) chatMsgs.push({ role: 'assistant', content: r }); return r; });
 }
 
-async function doSpeak(t) {
+// speak returns immediately, onEnd callback handles next ASR loop
+function doSpeak(t) {
   setExpression('speaking');
   showOverlay('🦕 小深在回答...');
-  await speak(t, mode.voice);
-  setExpression('default');
-  hideOverlay();
-  if (callActive) startASRLoop();
+  speak(t, mode.voice,
+    () => {},  // onStart
+    () => {    // onEnd — audio truly finished, or was interrupted
+      setExpression('default');
+      hideOverlay();
+      if (callActive) startASRLoop();
+    }
+  );
 }
-function setStatus(t) { const e = document.getElementById('status-text'); if (e) e.textContent = t; }
+
+// Overlay helpers
 function showOverlay(t) { const e = document.getElementById('action-overlay'); if (e) { e.textContent = t; e.style.display = 'flex'; } }
 function hideOverlay() { const e = document.getElementById('action-overlay'); if (e) e.style.display = 'none'; }
+function setStatus(t) { const e = document.getElementById('status-text'); if (e) e.textContent = t; }
 function showBubble(t) { const b = $('bubble'), tx = document.getElementById('bubble-text'); if (!b || !tx) return; tx.textContent = t; b.style.display = 'block'; clearTimeout(window._bb); window._bb = setTimeout(() => b.style.display = 'none', 12000); }
 
 // ========== HOME ==========
@@ -58,12 +65,22 @@ function showLogs() { const logs = getLogs(), el = $('diag-log-w'); if (!el) ret
 
 // ========== CALL MODE ==========
 async function startASRLoop() {
-  if (!callActive || isSpeaking() || isRecording()) return;
+  if (!callActive || isRecording()) return;
+  // Interrupt AI if it's currently speaking
+  if (isSpeaking()) stopSpeak();
+
   showOverlay('🎤 正在听...');
   const ok = await startRecord();
   if (!ok) { hideOverlay(); setStatus('🎤 录音未就绪，请打字'); }
 }
-function onASRResult(t) { hideOverlay(); if (callActive && !isSpeaking() && t) { setStatus('🤔 小深在想...'); processText(t); } else if (callActive && !isSpeaking()) { setStatus(''); startASRLoop(); } }
+
+function onASRResult(t) {
+  if (!callActive || isSpeaking()) return;
+  hideOverlay();
+  if (t) { setStatus('🤔 小深在想...'); processText(t); }
+  else { startASRLoop(); }
+}
+
 async function processText(t) { addMsg('u', t); try { const r = await aiReply(t); if (r) { addMsg('a', r); doSpeak(r); } else startASRLoop(); } catch { addMsg('s', '网络出错了'); startASRLoop(); } }
 
 function enterCall() {

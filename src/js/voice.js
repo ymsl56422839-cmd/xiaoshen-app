@@ -1,36 +1,44 @@
 import { ttsSpeak } from './api.js';
 
+let currentAudio = null;
+
 export function init() {}
 
-export function speak(text, voice = 'female') {
-  return new Promise(resolve => {
-    const a = new Audio();
-    let cleanup = null;
+export function speak(text, voice, onStart, onEnd) {
+  stopSpeak();
+  const a = new Audio();
+  let cleanup = null;
+  currentAudio = a;
 
-    const done = () => {
-      try { a.pause(); a.src = ''; } catch {}
-      if (cleanup) cleanup();
-      resolve();
-    };
+  const done = () => {
+    if (currentAudio === a) currentAudio = null;
+    try { a.pause(); a.src = ''; } catch {}
+    if (cleanup) { cleanup(); cleanup = null; }
+    onEnd?.();
+  };
 
-    // Try GLM-TTS, fallback to Google
-    ttsSpeak(text, voice).then(buf => {
-      const blob = new Blob([buf]);
-      cleanup = () => URL.revokeObjectURL(URL.createObjectURL(blob));
-      a.src = URL.createObjectURL(blob);
-      a.load();
-    }).catch(() => {
-      const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=${encodeURIComponent(text)}`;
-      a.src = url;
-      a.load();
-    });
-
-    a.oncanplaythrough = () => a.play().catch(() => done());
-    a.onended = () => done();
-    a.onerror = () => done();
-    setTimeout(() => done(), 15000);
+  ttsSpeak(text, voice).then(buf => {
+    const blob = new Blob([buf]);
+    const url = URL.createObjectURL(blob);
+    cleanup = () => URL.revokeObjectURL(url);
+    a.src = url; a.load();
+  }).catch(() => {
+    a.src = `https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q=${encodeURIComponent(text)}`;
+    a.load();
   });
+
+  a.oncanplaythrough = () => { a.play().catch(() => done()); onStart?.(); };
+  a.onended = () => done();
+  a.onerror = () => done();
+  setTimeout(() => done(), 15000);
 }
 
-export function stopAll() {}
-export function isSpeaking() { return false; }
+export function stopSpeak() {
+  if (currentAudio) {
+    try { currentAudio.pause(); currentAudio.removeAttribute('src'); } catch {}
+    currentAudio = null;
+  }
+}
+
+export function isSpeaking() { return !!currentAudio; }
+export function stopAll() { stopSpeak(); }
