@@ -55,7 +55,7 @@ async function startASRLoop() {
   else setStatus('🎤 小深在听...');
 }
 function onASRResult(t) { if (callActive && !isSpeaking() && t) { setStatus('🤔 小深在想...'); processText(t); } else if (callActive && !isSpeaking()) { setStatus(''); startASRLoop(); } }
-async function processText(t) { try { const r = await aiReply(t); if (r) { addMsg('a', r); doSpeak(r); } else startASRLoop(); } catch { addMsg('s', '网络出错了'); startASRLoop(); } }
+async function processText(t) { addMsg('u', t); try { const r = await aiReply(t); if (r) { addMsg('a', r); doSpeak(r); } else startASRLoop(); } catch { addMsg('s', '网络出错了'); startASRLoop(); } }
 
 function enterCall() {
   callActive = true; chatMsgs = [];
