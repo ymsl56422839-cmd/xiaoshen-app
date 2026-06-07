@@ -1,5 +1,6 @@
 import { asrTranscribe } from './api.js';
 import { error as logErr } from './logger.js';
+import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 
 let stream=null,recorder=null,chunks=[],onResult=null,recording=false,timeout=null;
 
@@ -8,6 +9,8 @@ export function init(cbs){onResult=cbs.onResult;}
 export async function startRecord(){
   if(recording)return true;
   try{
+    // Request mic permission via native Android dialog
+    await SpeechRecognition.requestPermissions();
     stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
     const mime = detectMime();
     if(!mime){logErr('浏览器不支持音频录制','ASR');return false;}
