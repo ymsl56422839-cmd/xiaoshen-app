@@ -75,7 +75,7 @@ async function startASRLoop() {
 }
 
 function onASRResult(t) {
-  if (!callActive || isSpeaking()) return;
+  if (!callActive) return;
   hideOverlay();
   if (t) { setStatus('🤔 小深在想...'); processText(t); }
   else { startASRLoop(); }
@@ -118,7 +118,7 @@ function enterCall() {
 
 function sendText() {
   const inp = $('chat-inp'), v = inp?.value?.trim(); if (!v) return; inp.value = '';
-  addMsg('u', v); processText(v);
+  processText(v);
 }
 function addMsg(role, text) {
   const el = $('chat-msgs'); if (!el) return;

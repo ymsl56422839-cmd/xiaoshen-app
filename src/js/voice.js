@@ -18,7 +18,7 @@ export function speak(text, voice, onStart, onEnd) {
   };
 
   ttsSpeak(text, voice).then(buf => {
-    const blob = new Blob([buf]);
+    const blob = new Blob([buf], { type: 'audio/wav' });
     const url = URL.createObjectURL(blob);
     cleanup = () => URL.revokeObjectURL(url);
     a.src = url; a.load();
@@ -35,7 +35,7 @@ export function speak(text, voice, onStart, onEnd) {
 
 export function stopSpeak() {
   if (currentAudio) {
-    try { currentAudio.pause(); currentAudio.removeAttribute('src'); } catch {}
+    try { currentAudio.pause(); currentAudio.src = ''; } catch {}
     currentAudio = null;
   }
 }
