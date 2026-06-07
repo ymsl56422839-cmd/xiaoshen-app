@@ -6,28 +6,26 @@ export async function runDiagnostics() {
   // Network
   const t0 = Date.now();
   try {
-    const ctrl = new AbortController();
-    const tm = setTimeout(() => ctrl.abort(), 5000);
-    const resp = await fetch('https://api.deepseek.com/v1/models', { signal: ctrl.signal });
-    clearTimeout(tm);
-    r.push({ name: '网络连接', ok: resp.ok, ms: Date.now() - t0, d: resp.ok ? '正常' : resp.status });
+    const ctrl = new AbortController(); const tm = setTimeout(() => ctrl.abort(), 5000);
+    await fetch('https://open.bigmodel.cn', { signal: ctrl.signal });
+    clearTimeout(tm); r.push({ name: '网络连接', ok: true, ms: Date.now() - t0, d: '正常' });
   } catch (e) { r.push({ name: '网络连接', ok: false, ms: Date.now() - t0, d: e.message }); }
 
   // DeepSeek
   const t1 = Date.now();
   try { const reply = await race(deepseekChat([{ role: 'user', content: '回OK' }]), 8000);
-    r.push({ name: 'DeepSeek API', ok: !!reply, ms: Date.now() - t1, d: reply ? '正常' : '空' }); }
+    r.push({ name: 'DeepSeek API', ok: !!reply, ms: Date.now() - t1, d: reply ? '正常' : '空响应' }); }
   catch (e) { r.push({ name: 'DeepSeek API', ok: false, ms: Date.now() - t1, d: e.message }); }
 
   // GLM-TTS
   const t2 = Date.now();
-  try { const buf = await race(ttsSpeak('测试音', 'tongtong'), 8000);
+  try { const buf = await race(ttsSpeak('测试音', 'female'), 8000);
     r.push({ name: '智譜 GLM-TTS', ok: buf.byteLength > 0, ms: Date.now() - t2, d: buf.byteLength + 'B' }); }
   catch (e) { r.push({ name: '智譜 GLM-TTS', ok: false, ms: Date.now() - t2, d: e.message }); }
 
-  // GLM-Vision (small test image)
+  // GLM-Vision (real tiny image from internet)
   const t3 = Date.now();
-  try { const desc = await race(visionDescribe(TEST_JPG), 8000);
+  try { const desc = await race(visionDescribe(TEST_IMG, 'image/png'), 8000);
     r.push({ name: '智譜 Vision', ok: !!desc, ms: Date.now() - t3, d: desc || '空' }); }
   catch (e) { r.push({ name: '智譜 Vision', ok: false, ms: Date.now() - t3, d: e.message }); }
 
@@ -44,7 +42,8 @@ export async function runDiagnostics() {
   return r;
 }
 
-const TEST_JPG = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYI4Q/SFhSRFJUVY2J3Y2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigD//2Q==';
+// Tiny 1x1 pink PNG
+const TEST_IMG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
 async function race(p, ms) {
   return new Promise((resolve, reject) => {

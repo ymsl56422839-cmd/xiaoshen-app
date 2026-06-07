@@ -27,14 +27,14 @@ export async function deepseekChat(messages) {
   return d.choices?.[0]?.message?.content || '';
 }
 
-export async function visionDescribe(base64) {
+export async function visionDescribe(base64, mime='image/jpeg') {
   const d = await fetchJson(`${BASE}/chat/completions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${KEY}` },
     body: JSON.stringify({
       model: 'glm-5v-turbo',
       messages: [{ role: 'user', content: [
-        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
+        { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
         { type: 'text', text: '请用中文简要描述画面内容，30字以内。' }
       ]}]
     })
